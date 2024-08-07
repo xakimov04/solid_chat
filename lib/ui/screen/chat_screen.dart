@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../../data/models/message.dart';
 
 class ChatScreen extends StatelessWidget {
@@ -11,25 +12,17 @@ class ChatScreen extends StatelessWidget {
   Future<void> _downloadFile(
       String url, String fileName, BuildContext context) async {
     try {
-      Dio dio = Dio();
       var dir = await getApplicationDocumentsDirectory();
       if (context.mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) =>
-              const Center(child: CircularProgressIndicator()),
+          builder: (context) => DownloadProgressDialog(
+              url: url, fileName: fileName, dirPath: dir.path),
         );
       }
-      await dio.download(url, "${dir.path}/$fileName").then(
-        (value) {
-          if (context.mounted) {
-            Navigator.of(context).pop();
-          }
-        },
-      );
     } catch (e) {
-      print("Download failed: $e");
+      Fluttertoast.showToast(msg: "Download failed: $e");
     }
   }
 
@@ -168,6 +161,80 @@ class ChatScreen extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class DownloadProgressDialog extends StatefulWidget {
+  final String url;
+  final String fileName;
+  final String dirPath;
+
+  const DownloadProgressDialog({
+    super.key,
+    required this.url,
+    required this.fileName,
+    required this.dirPath,
+  });
+
+  @override
+  State<DownloadProgressDialog> createState() => _DownloadProgressDialogState();
+}
+
+class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
+  late Dio _dio;
+  double _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _dio = Dio();
+    _startDownload();
+  }
+
+  void _startDownload() async {
+    try {
+      await _dio.download(
+        widget.url,
+        "${widget.dirPath}/${widget.fileName}",
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            setState(() {
+              _progress = received / total;
+            });
+          }
+        },
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+        Fluttertoast.showToast(
+            msg: "Download complete",
+            backgroundColor: Colors.green,
+            textColor: Colors.white);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        Fluttertoast.showToast(
+            msg: "Download failed: $e",
+            backgroundColor: Colors.red,
+            textColor: Colors.white);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Downloading..."),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LinearProgressIndicator(value: _progress),
+          const SizedBox(height: 20),
+          Text("${(_progress * 100).toStringAsFixed(0)}%"),
         ],
       ),
     );
